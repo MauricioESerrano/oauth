@@ -11,8 +11,9 @@ const config = {
   authRequired: false,
   auth0Logout: true,
   secret: process.env.AUTH0_CLIENT_SECRET,
-  baseURL: "http://137.110.115.26:3000", 
+  baseURL: "http://137.110.115.26:3000",
   clientID: process.env.AUTH0_CLIENT_ID,
+  clientSecret: process.env.AUTH0_CLIENT_SECRET,  // Add clientSecret here
   issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}`,
   authorizationParams: {
     redirect_uri: "http://137.110.115.26:3000/callback",
