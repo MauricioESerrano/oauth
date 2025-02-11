@@ -13,12 +13,9 @@ const config = {
   secret: process.env.AUTH0_CLIENT_SECRET,
   baseURL: "http://137.110.115.26:3000",
   clientID: process.env.AUTH0_CLIENT_ID,
-  clientSecret: process.env.AUTH0_CLIENT_SECRET,  // Add clientSecret here
   issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}`,
   authorizationParams: {
     redirect_uri: "http://137.110.115.26:3000/callback",
-    response_type: "code id_token",  // Request both code and id_token
-    scope: "openid profile email",  // Ensure openid scope is included
   },
 };
 
@@ -40,13 +37,16 @@ app.get("/", (req, res) => {
 
 // Redirect to Auth0 ULP
 app.get("/login", (req, res) => {
-  res.oidc.login();
+  res.oidc.login({
+    authorizationParams: {
+      state: "optional_state_param"  // You can add a custom state if needed
+    }
+  });
 });
 
 // Callback route after successful login
 app.get("/callback", async (req, res) => {
-  // Log the received tokens to check if id_token is included
-  console.log("Received Tokens:", req.oidc.tokens);
+  console.log("Callback request params:", req.query);  // Check if state is present
 
   const user = req.oidc.user;
 
@@ -92,6 +92,7 @@ app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
   console.log(`Server running on http://137.110.115.26:3000`);
 });
+
 
 
 
