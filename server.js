@@ -11,11 +11,13 @@ const config = {
   authRequired: false,
   auth0Logout: true,
   secret: process.env.AUTH0_CLIENT_SECRET,
-  baseURL: "http://137.110.115.26:3000",  // Fixed: Added http://
+  baseURL: "http://137.110.115.26:3000", 
   clientID: process.env.AUTH0_CLIENT_ID,
   issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}`,
   authorizationParams: {
-    redirect_uri: "http://137.110.115.26/callback",  // Fixed: Added http://
+    redirect_uri: "http://137.110.115.26:3000/callback",
+    response_type: "code id_token",  // Request both code and id_token
+    scope: "openid profile email",  // Ensure openid scope is included
   },
 };
 
@@ -42,6 +44,9 @@ app.get("/login", (req, res) => {
 
 // Callback route after successful login
 app.get("/callback", async (req, res) => {
+  // Log the received tokens to check if id_token is included
+  console.log("Received Tokens:", req.oidc.tokens);
+
   const user = req.oidc.user;
 
   // Meraki API integration - Sending user data to Meraki
