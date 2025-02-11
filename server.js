@@ -11,11 +11,11 @@ const config = {
   authRequired: false,
   auth0Logout: true,
   secret: process.env.AUTH0_CLIENT_SECRET,
-  baseURL: "137.110.115.26:3000",
+  baseURL: "http://137.110.115.26:3000",  // Fixed: Added http://
   clientID: process.env.AUTH0_CLIENT_ID,
   issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}`,
   authorizationParams: {
-    redirect_uri: "137.110.115.26/callback",
+    redirect_uri: "http://137.110.115.26/callback",  // Fixed: Added http://
   },
 };
 
@@ -85,8 +85,8 @@ app.get("/profile", requiresAuth(), (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
   console.log(`Server running on http://137.110.115.26:3000`);
-
 });
+
 
 
 // ----------------------------------------------------------------------------------------------------
