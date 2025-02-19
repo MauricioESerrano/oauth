@@ -41,6 +41,8 @@ app.get("/", (req, res) => {
   }
 });
 
+console.log("Before /login.");
+
 // Redirect to Auth0 ULP
 app.get("/login", (req, res) => {
   console.log("Login route accessed");
