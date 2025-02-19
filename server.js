@@ -1,3 +1,5 @@
+// http://qi-nuc-5102.ucsd.edu:3000/
+
 require("dotenv").config();
 const express = require("express");
 const { auth, requiresAuth } = require("express-openid-connect");
@@ -5,24 +7,24 @@ const axios = require("axios");
 
 const app = express();
 const PORT = 3000;
+const PRIVATE_IP = "192.168.128.7"; 
+const PUBLIC_IP = "137.110.115.26"; 
 
 // Auth0 Configuration
 const config = {
   authRequired: false,
   auth0Logout: true,
   secret: process.env.AUTH0_CLIENT_SECRET,
-  baseURL: "http://137.110.115.26:3000",
+  baseURL: `http://${PUBLIC_IP}:${PORT}`,
   clientID: process.env.AUTH0_CLIENT_ID,
   issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}`,
   authorizationParams: {
-    redirect_uri: "http://137.110.115.26:3000/callback",
+    redirect_uri: `http://${PUBLIC_IP}:${PORT}/callback`,
   },
 };
 
-// Use Auth0 to manage authentication
 app.use(auth(config));
 
-// Public Route
 app.get("/", (req, res) => {
   if (req.oidc.isAuthenticated()) {
     res.send(`
@@ -37,31 +39,25 @@ app.get("/", (req, res) => {
 
 // Redirect to Auth0 ULP
 app.get("/login", (req, res) => {
-  res.oidc.login({
-    authorizationParams: {
-      state: "optional_state_param"  // You can add a custom state if needed
-    }
-  });
+  res.oidc.login();
 });
 
-// Callback route after successful login
+// Callback route post successful login
 app.get("/callback", async (req, res) => {
-  console.log("Callback request params:", req.query);  // Check if state is present
+  console.log("Callback request params:", req.query);
 
   const user = req.oidc.user;
-
-  // Meraki API integration - Sending user data to Meraki
+  
+  // Meraki API integration - Sending user data to meraki
   try {
-    const merakiOrgId = '1568322';
     const merakiNetworkId = 'L_686235993220612846';
-    const merakiApiKey = '6aca7d649c068ec26b9b4062dbb51cdc06da49c2';
+    const merakiApiKey = process.env.MERAKI_API_KEY;
 
-    const response = await axios.post(
-      `https://api.meraki.com/api/v1/networks/${merakiNetworkId}/clients`, 
+    await axios.post(
+      `https://api.meraki.com/api/v1/networks/${merakiNetworkId}/clients`,
       {
-        // User Information
-        email: user.email, 
-        name: user.name, 
+        email: user.email,
+        name: user.name,
         role: "user",
       },
       {
@@ -78,7 +74,7 @@ app.get("/callback", async (req, res) => {
   }
 });
 
-// Protected route, only accessible if logged in
+// For thosse users who have logged in (currently just shows data of the user thats it.)
 app.get("/profile", requiresAuth(), (req, res) => {
   res.send(`
     <h1>Profile</h1>
@@ -87,12 +83,10 @@ app.get("/profile", requiresAuth(), (req, res) => {
   `);
 });
 
-// Server Start
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-  console.log(`Server running on http://137.110.115.26:3000`);
+app.listen(PORT, PRIVATE_IP, () => {
+  console.log(`Server running locally at http://${PRIVATE_IP}:${PORT}`);
+  console.log(`OAuth responses handled via http://${PUBLIC_IP}:${PORT}`);
 });
-
 
 
 
