@@ -8,12 +8,12 @@ const PORT = 3000;
 const PRIVATE_IP = "192.168.128.7"; 
 const PUBLIC_IP = "137.110.115.26"; 
 
-
 // Auth0 Configuration
 const config = {
   authRequired: false,
   auth0Logout: true,
   secret: process.env.AUTH0_CLIENT_SECRET,
+  // public ip that auth0 etc. use
   baseURL: `http://${PUBLIC_IP}:${PORT}`,
   clientID: process.env.AUTH0_CLIENT_ID,
   issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}`,
@@ -22,72 +22,47 @@ const config = {
   },
 };
 
-console.log("Auth0 configuration set up");
-
 app.use(auth(config));
 
+// Route handlers remain the same
 app.get("/", (req, res) => {
-  console.log("home route entered");
   if (req.oidc.isAuthenticated()) {
-    console.log("user auth-ed:", req.oidc.user);
     res.send(`
       <h1>Welcome ${req.oidc.user.name}</h1>
       <pre>${JSON.stringify(req.oidc.user, null, 2)}</pre>
       <a href="/logout">Logout</a>
     `);
   } else {
-    console.log("User is NOT auth-ed");
     res.send('<h1>Welcome</h1><a href="/login">Login</a>');
   }
 });
 
-console.log("Before /login.");
+app.get("/login", (req, res) => res.oidc.login());
 
-// Redirect to Auth0 ULP
-app.get("/login", (req, res) => {
-  console.log("Login route accessed");
-  res.oidc.login();
-});
-
-console.log("Reached ULP.");
-
-// Callback route post successful login
 app.get("/callback", async (req, res) => {
-  console.log("callback route accessed. Request params:", req.query);
-
-  const user = req.oidc.user;
-  console.log("Retrieved user from session:", user);
-
-  // Meraki API integration - Sending user data to Meraki
   try {
     const merakiNetworkId = 'L_686235993220612846';
-    const merakiApiKey = process.env.MERAKI_API_KEY;
-
-    console.log("Sending user data to Meraki");
     await axios.post(
       `https://api.meraki.com/api/v1/networks/${merakiNetworkId}/clients`,
       {
-        email: user.email,
-        name: user.name,
+        email: req.oidc.user.email,
+        name: req.oidc.user.name,
         role: "user",
       },
       {
         headers: {
-          "X-Cisco-Meraki-API-Key": merakiApiKey,
+          "X-Cisco-Meraki-API-Key": process.env.MERAKI_API_KEY,
         },
       }
     );
-    console.log("Successfully sent user data to Meraki");
-    res.send('<h1>Logged in successfully and sent data to Meraki!</h1><a href="/">Home</a>');
+    res.send('<h1>Login & Meraki update successful!</h1><a href="/">Home</a>');
   } catch (error) {
-    console.error("Error sending data to Meraki:", error);
-    res.send('<h1>Error occurred while sending data to Meraki!</h1><a href="/">Home</a>');
+    console.error("Meraki error:", error);
+    res.send('<h1>Meraki update failed!</h1><a href="/">Home</a>');
   }
 });
 
-// For authenticated users to view their profile
 app.get("/profile", requiresAuth(), (req, res) => {
-  console.log("Access made by", req.oidc.user);
   res.send(`
     <h1>Profile</h1>
     <pre>${JSON.stringify(req.oidc.user, null, 2)}</pre>
@@ -95,9 +70,9 @@ app.get("/profile", requiresAuth(), (req, res) => {
   `);
 });
 
-app.listen(PORT, PRIVATE_IP, () => {
-  console.log(`Server running locally at http://${PRIVATE_IP}:${PORT}`);
-  console.log(`OAuth responses handled via http://${PUBLIC_IP}:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Internal access: http://${PRIVATE_IP}:${PORT}`);
+  console.log(`External auth flow: http://${PUBLIC_IP}:${PORT}`);
 });
 
 
