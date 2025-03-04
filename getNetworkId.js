@@ -14,3 +14,14 @@ axios.get(`https://api.meraki.com/api/v1/organizations/${orgId}/networks`, {
 .catch(error => {
   console.log('Error:', error.response ? error.response.data : error.message);
 });
+
+
+
+
+// https://qi-nuc-5102.ucsd.edu:3000/
+
+// ppt draw architecture. important steps. similar to whiteboard. flow. including (setup diagram)
+// call flow user -> auth -> etc. 
+// software description. software flow
+
+// Check google google cloud debug (logging) 

@@ -3,34 +3,52 @@ require("dotenv").config();
 const express = require("express");
 const { auth, requiresAuth } = require("express-openid-connect");
 const axios = require("axios");
-const https = require("https");
 const fs = require("fs");
-const app = express();
+// const https = require("https"); // Not used for local, want HTTP
 
+const app = express();
 const PORT = 3000;
 
-// const PRIVATE_IP = "192.168.128.7";
+// NUC
+// const PRIVATE_IP = "192.168.128.9";
+
+// Local
 const PRIVATE_IP = "100.80.225.61";
 const PUBLIC_IP = "137.110.115.26";
 
+// Use NODE_ENV to determine if we're running locally (development) or in production.
+const isLocal = true;
+// Choose protocol based on environment (HTTP for local, HTTPS for production)
+const protocol = isLocal ? "http" : "https";
+
 console.log("Initializing");
 
-// Configure Auth0 settings
+// Configure Auth0 settings using the appropriate protocol
 const config = {
   authRequired: false,
   auth0Logout: true,
   secret: process.env.AUTH0_CLIENT_SECRET,
-  baseURL: `https://${PUBLIC_IP}:${PORT}`,
+  baseURL: `${protocol}://${PRIVATE_IP}:${PORT}`, // Use HTTP if local, HTTPS if production
   clientID: process.env.AUTH0_CLIENT_ID,
+  // Auth0 domain is always HTTPS
   issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}`,
   authorizationParams: {
-    redirect_uri: `https://${PUBLIC_IP}:${PORT}/callback`,
+    redirect_uri: `${protocol}://${PRIVATE_IP}:${PORT}/callback`, // Match protocol for callback
   },
 };
 
 console.log("Auth0 configuration initialized:", config);
 
-// Add Auth0 authentication middleware to all routes based on the configuration above
+// Middleware to enforce HTTPS redirection in production only
+app.use((req, res, next) => {
+  if (!req.secure && !isLocal) {
+    // In production, redirect HTTP to HTTPS
+    return res.redirect(`https://${req.headers.host}${req.url}`);
+  }
+  next();
+});
+
+// Add Auth0 authentication middleware
 app.use(auth(config));
 console.log("Auth0 applied.");
 
@@ -56,36 +74,46 @@ app.get("/login", (req, res) => {
   res.oidc.login();
 });
 
-// Define the /callback route
-app.get("/callback", async (req, res) => {
-  console.log("Callback route accessed.");
-  try {
-    const merakiNetworkId = 'L_686235993220612846';
-    console.log("Updating Meraki client details for:", req.oidc.user.email);
+// Modified /callback route:
+// The first middleware calls req.oidc.handleCallback() to validate state, tokens, etc.
+// Then the async function runs your custom logic.
+app.get(
+  "/callback",
+  (req, res, next) => {
+    // Handle Auth0 callback validation (state, tokens, etc.)
+    req.oidc.handleCallback(req, res, next);
+  },
+  async (req, res) => {
+    console.log("Callback route accessed.");
+    try {
+      const merakiNetworkId = 'L_686235993220612846';
+      console.log("Updating Meraki client details for:", req.oidc.user.email);
 
-    await axios.post(
-      `https://api.meraki.com/api/v1/networks/${merakiNetworkId}/clients`,
-      {
-        email: req.oidc.user.email,
-        name: req.oidc.user.name,
-        role: "user",
-      },
-      {
-        headers: {
-          "X-Cisco-Meraki-API-Key": process.env.MERAKI_API_KEY,
-          "Content-Type": "application/json",
+      // POST updated client details to Meraki API
+      await axios.post(
+        `https://api.meraki.com/api/v1/networks/${merakiNetworkId}/clients`,
+        {
+          email: req.oidc.user.email,
+          name: req.oidc.user.name,
+          role: "user",
         },
-      }
-    );
-    console.log("Meraki update successful.");
-    res.send('<h1>Login & Meraki update successful!</h1><a href="/">Home</a>');
-  } catch (error) {
-    console.error("Meraki error:", error);
-    res.send('<h1>Meraki update failed!</h1><a href="/">Home</a>');
+        {
+          headers: {
+            "X-Cisco-Meraki-API-Key": process.env.MERAKI_API_KEY,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      console.log("Meraki update successful.");
+      res.send('<h1>Login & Meraki update successful!</h1><a href="/">Home</a>');
+    } catch (error) {
+      console.error("Meraki error:", error);
+      res.send('<h1>Meraki update failed!</h1><a href="/">Home</a>');
+    }
   }
-});
+);
 
-// TEMP: Define the /profile route
+// Define the /profile route (requires authentication)
 app.get("/profile", requiresAuth(), (req, res) => {
   console.log("Profile route accessed for user:", req.oidc.user.email);
   res.send(`
@@ -95,35 +123,30 @@ app.get("/profile", requiresAuth(), (req, res) => {
   `);
 });
 
-// Define SSL options
-console.log("Loading SSL certificates...");
+// For local development, we are using HTTP so we start the server normally.
+// (In production, we want to uncomment the HTTPS server section below and load SSL certificates.)
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Internal access: ${protocol}://${PRIVATE_IP}:${PORT}`);
+  console.log(`External auth flow: ${protocol}://${PUBLIC_IP}:${PORT}`);
+});
+
+/* 
+// following code for production HTTPS deployment w/ SSL certificates.
+
+// Load SSL certificates
+console.log("Loading SSL certificates");
 const sslOptions = {
   key: fs.readFileSync("etc/ssl/privkey1.pem"),
   cert: fs.readFileSync("etc/ssl/fullchain1.pem"),
 };
 console.log("SSL certificates loaded successfully.");
 
-// Public Run w/ HTTPS
+// Start HTTPS server
 https.createServer(sslOptions, app).listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running at: https://qi-nuc-5102.ucsd.edu:${PORT}`);
-  // console.log(`Internal access: https://${PRIVATE_IP}:${PORT}`);
-  // console.log(`External auth flow: https://${PUBLIC_IP}:${PORT}`);
+// Adjust the URLs accordingly in production.
+  console.log(`Server running at: https://your-production-domain:${PORT}`);
+  console.log(`Internal access: https://${PRIVATE_IP}:${PORT}`);
+  console.log(`External auth flow: https://${PUBLIC_IP}:${PORT}`);
 });
-
-
-
-// Local Run
-// app.listen(PORT, '0.0.0.0', () => {
-//   console.log(`Internal access: http://${PRIVATE_IP}:${PORT}`);
-//   console.log(`External auth flow: http://${PUBLIC_IP}:${PORT}`);
-// });
-
-
-
-// https://qi-nuc-5102.ucsd.edu:3000/
-
-// ppt draw architecture. important steps. similar to whiteboard. flow. including (setup diagram)
-// call flow user -> auth -> etc. 
-// software description. software flow
-
-// Check google google cloud debug (logging) 
+*/
