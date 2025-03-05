@@ -4,61 +4,53 @@ const express = require("express");
 const { auth, requiresAuth } = require("express-openid-connect");
 const axios = require("axios");
 const fs = require("fs");
-const https = require("https"); // Not used for local, want HTTP
+const https = require("https");
 
 const app = express();
 const PORT = 3000;
 
-// NUC
-const PRIVATE_IP = "192.168.128.9";
+const PRIVATE_IP = "192.168.128.9";   // For splash page access on WiFi
+const PUBLIC_IP = "137.110.115.26";     // For external OAuth callbacks
 
-// Local
-// const PRIVATE_IP = "100.80.225.61";
-
-
-
-const PUBLIC_IP = "137.110.115.26";
-
+// Toggle environment (false means production, true would be local testing)
 const isLocal = false;
-
-// Choose protocol based on environment (HTTP for local, HTTPS for production)
 const protocol = isLocal ? "http" : "https";
-// const protocol = "https";
+
+// The base URL for serving your splash page (private IP) and the callback URL (public IP)
+const localBaseURL = `${protocol}://${PRIVATE_IP}:${PORT}`;
+const callbackURL = `${protocol}://${PUBLIC_IP}:${PORT}/callback`;
 
 console.log("Initializing");
 
-// Configure Auth0 settings using the appropriate protocol
+// Configure Auth0 settings.
+// Note: baseURL is the private IP (for WiFi users), while the callback URI is the public IP.
 const config = {
   authRequired: false,
   auth0Logout: true,
   secret: process.env.AUTH0_CLIENT_SECRET,
-  baseURL: `${protocol}://${PRIVATE_IP}:${PORT}`, // Use HTTP if local, HTTPS if production
+  baseURL: localBaseURL,
   clientID: process.env.AUTH0_CLIENT_ID,
-  // Auth0 domain is always HTTPS
   issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}`,
   authorizationParams: {
-
-    // May need to test this with public_IP 
-    redirect_uri: `${protocol}://${PRIVATE_IP}:${PORT}/callback`, // Match protocol for callback
+    redirect_uri: callbackURL,
   },
 };
 
 console.log("Auth0 configuration initialized:", config);
 
-// Middleware to enforce HTTPS redirection in production only
+// Middleware to enforce HTTPS redirection in production only.
 app.use((req, res, next) => {
   if (!req.secure && !isLocal) {
-    // In production, redirect HTTP to HTTPS
     return res.redirect(`https://${req.headers.host}${req.url}`);
   }
   next();
 });
 
-// Add Auth0 authentication middleware
+// Add Auth0 authentication middleware.
 app.use(auth(config));
 console.log("Auth0 applied.");
 
-// Define the root route ("/")
+// Define the root route ("/") as the splash page.
 app.get("/", (req, res) => {
   console.log("Root route accessed.");
   if (req.oidc.isAuthenticated()) {
@@ -74,19 +66,16 @@ app.get("/", (req, res) => {
   }
 });
 
-// Define the /login route
+// Define the /login route.
 app.get("/login", (req, res) => {
   console.log("Login route accessed.");
   res.oidc.login();
 });
 
-// Modified /callback route:
-// The first middleware calls req.oidc.handleCallback() to validate state, tokens, etc.
-// Then the async function runs your custom logic.
+// The /callback route validates the authentication callback and runs custom logic.
 app.get(
   "/callback",
   (req, res, next) => {
-    // Handle Auth0 callback validation (state, tokens, etc.)
     req.oidc.handleCallback(req, res, next);
   },
   async (req, res) => {
@@ -95,7 +84,7 @@ app.get(
       const merakiNetworkId = 'L_686235993220612846';
       console.log("Updating Meraki client details for:", req.oidc.user.email);
 
-      // POST updated client details to Meraki API
+      // POST updated client details to the Meraki API.
       await axios.post(
         `https://api.meraki.com/api/v1/networks/${merakiNetworkId}/clients`,
         {
@@ -119,7 +108,7 @@ app.get(
   }
 );
 
-// Define the /profile route (requires authentication)
+// Define the /profile route (requires authentication).
 app.get("/profile", requiresAuth(), (req, res) => {
   console.log("Profile route accessed for user:", req.oidc.user.email);
   res.send(`
@@ -129,30 +118,16 @@ app.get("/profile", requiresAuth(), (req, res) => {
   `);
 });
 
-// For local development, we are using HTTP so we start the server normally.
-// (In production, we want to uncomment the HTTPS server section below and load SSL certificates.)
-
-// app.listen(PORT, '0.0.0.0', () => {
-//   console.log(`Internal access: ${protocol}://${PRIVATE_IP}:${PORT}`);
-//   console.log(`External auth flow: ${protocol}://${PUBLIC_IP}:${PORT}`);
-// });
-
-
-// following code for production HTTPS deployment w/ SSL certificates.
-
-// Load SSL certificates
+// Production: Load SSL certificates and start the HTTPS server.
 console.log("Loading SSL certificates");
 const sslOptions = {
-  key: fs.readFileSync("/privkey1.pem"),
-  cert: fs.readFileSync("/fullchain1.pem"),
+  key: fs.readFileSync("/etc/ssl/private/privkey1.pem"),
+  cert: fs.readFileSync("/etc/ssl/private/fullchain1.pem"),
 };
 console.log("SSL certificates loaded successfully.");
 
-// Start HTTPS server
-// ! NOTE: Change 0.0.0.0 to relevant ip in order to avoid security breaches
-https.createServer(sslOptions, app).listen(PORT, '0.0.0.0', () => {
-// Adjust the URLs accordingly in production.
-  console.log(`Server running at: https://qi-nuc-5102.ucsd.edu:${PORT}`);
-  console.log(`Internal access: https://${PRIVATE_IP}:${PORT}`);
-  console.log(`External auth flow: https://${PUBLIC_IP}:${PORT}`);
+// Start HTTPS server (listening on all interfaces).
+https.createServer(sslOptions, app).listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running at: https://${PUBLIC_IP}:${PORT}`);
+  console.log(`Splash page (WiFi) access via: https://${PRIVATE_IP}:${PORT}`);
 });
