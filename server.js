@@ -5,25 +5,59 @@ const { auth, requiresAuth } = require("express-openid-connect");
 const axios = require("axios");
 const fs = require("fs");
 const https = require("https");
+const session = require("express-session");
+const winston = require("winston");
+
+const logger = winston.createLogger({
+  level: "info",
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.File({ filename: "error.log", level: "error" }),
+    new winston.transports.File({ filename: "Logs.log" })
+  ]
+});
 
 const app = express();
 const PORT = 3000;
 
-const PRIVATE_IP = "192.168.128.9";   // For splash page access on WiFi
-const PUBLIC_IP = "137.110.115.26";     // For external OAuth callbacks
+// MY APARTMENT network settings
+const PRIVATE_IP = "192.168.1.75";
+const PUBLIC_IP = "68.252.125.3";
 
-// Toggle environment (false means production, true would be local testing)
+//false == production, true == local
 const isLocal = false;
 const protocol = isLocal ? "http" : "https";
 
-// The base URL for serving your splash page (private IP) and the callback URL (public IP)
+// The base URL served on private
 const localBaseURL = `${protocol}://${PRIVATE_IP}:${PORT}`;
+// callBack URL for handling callbacks
 const callbackURL = `${protocol}://${PUBLIC_IP}:${PORT}/callback`;
 
-console.log("Initializing");
+logger.info("Initializing application");
 
-// Configure Auth0 settings.
-// Note: baseURL is the private IP (for WiFi users), while the callback URI is the public IP.
+// Set up session middleware (used to store Meraki GET parameters)
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: true
+  })
+);
+
+// Middleware (this forces HTTPS redirection [production only])
+app.use((req, res, next) => {
+  if (!req.secure && !isLocal) {
+    return res.redirect(`https://${req.headers.host}${req.url}`);
+  }
+  next();
+});
+
+// AUTH0 settings
+// Note: baseURL is the private IP (wifi users), while the callback URI is the public IP
+// defined above the values.
 const config = {
   authRequired: false,
   auth0Logout: true,
@@ -32,85 +66,102 @@ const config = {
   clientID: process.env.AUTH0_CLIENT_ID,
   issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}`,
   authorizationParams: {
-    redirect_uri: callbackURL,
-  },
+    redirect_uri: callbackURL
+  }
 };
 
-console.log("Auth0 configuration initialized:", config);
-
-// Middleware to enforce HTTPS redirection in production only.
-app.use((req, res, next) => {
-  if (!req.secure && !isLocal) {
-    return res.redirect(`https://${req.headers.host}${req.url}`);
-  }
-  next();
-});
+logger.info("Auth0 configuration initialized:", config);
 
 // Add Auth0 authentication middleware.
 app.use(auth(config));
-console.log("Auth0 applied.");
+logger.info("Auth0 applied.");
 
-// Define the root route ("/") as the splash page.
+// Root route: Captures Meraki splash GET parameters and shows the splash page.
 app.get("/", (req, res) => {
-  console.log("Root route accessed.");
+  // Capture GET parameters sent by Meraki (if any) and store in session
+  const { base_grant_url, user_continue_url, node_mac, client_ip, client_mac } = req.query;
+  if (base_grant_url && user_continue_url) {
+    req.session.merakiParams = { base_grant_url, user_continue_url, node_mac, client_ip, client_mac };
+    logger.info("Stored Meraki parameters in session:", req.session.merakiParams);
+  }
+
+  // Display splash page based on authentication status
   if (req.oidc.isAuthenticated()) {
-    console.log("User is authenticated:", req.oidc.user);
+    logger.info("User has NOW been auth-ed (after going through authentication process) OR pre-authenticated when they log in (means they've been through this recently. Check meraki for \"repeat every...\"", req.oidc.user);
     res.send(`
       <h1>Welcome ${req.oidc.user.name}</h1>
-      <pre>${JSON.stringify(req.oidc.user, null, 2)}</pre>
+      <p>You are logged in.</p>
       <a href="/logout">Logout</a>
     `);
   } else {
-    console.log("User is not authenticated.");
-    res.send('<h1>Welcome</h1><a href="/login">Login</a>');
+    logger.info("User is NOT pre-authed, must authenticate.");
+    res.send(`
+      <h1>Welcome to WiFi Access</h1>
+      <p>Please log in to gain access.</p>
+      <a href="/login">Login</a>
+    `);
   }
 });
 
-// Define the /login route.
+// /login route: Redirects the user to the Auth0 universal login page
 app.get("/login", (req, res) => {
-  console.log("Login route accessed.");
+  logger.info("Login route accessed.");
   res.oidc.login();
 });
 
-// The /callback route validates the authentication callback and runs custom logic.
+// /callback route: Handles Auth0 callback, updates Meraki client details, and redirects using Meraki splash parameters.
 app.get(
   "/callback",
   (req, res, next) => {
     req.oidc.handleCallback(req, res, next);
   },
-  async (req, res) => {
-    console.log("Callback route accessed.");
+  async (req, res, next) => {
+    logger.info("Callback route accessed.");
     try {
-      const merakiNetworkId = 'L_686235993220612846';
-      console.log("Updating Meraki client details for:", req.oidc.user.email);
+      const user = req.oidc.user;
+      const merakiNetworkId = "L_686235993220612846";
+      logger.info("Updating Meraki client details for:", user.email);
 
       // POST updated client details to the Meraki API.
       await axios.post(
         `https://api.meraki.com/api/v1/networks/${merakiNetworkId}/clients`,
         {
-          email: req.oidc.user.email,
-          name: req.oidc.user.name,
-          role: "user",
+          email: user.email,
+          name: user.name,
+          role: "user"
         },
         {
           headers: {
             "X-Cisco-Meraki-API-Key": process.env.MERAKI_API_KEY,
-            "Content-Type": "application/json",
-          },
+            "Content-Type": "application/json"
+          }
         }
       );
-      console.log("Meraki update successful.");
-      res.send('<h1>Login & Meraki update successful!</h1><a href="/">Home</a>');
+      logger.info("Meraki update successful.");
+
+      // If Meraki splash parameters were captured, redirect the user to grant URL.
+      if (req.session.merakiParams && req.session.merakiParams.base_grant_url && req.session.merakiParams.user_continue_url) {
+        const { base_grant_url, user_continue_url } = req.session.merakiParams;
+        // Clear the stored parameters from session for security.
+        req.session.merakiParams = null;
+        // Redirect user to the assembled Meraki grant URL.
+        const redirectURL = `${base_grant_url}?continue_url=${encodeURIComponent(user_continue_url)}`;
+        logger.info("Redirecting user to Meraki grant URL:", redirectURL);
+        return res.redirect(redirectURL);
+      } else {
+        // Fallback: redirect to splash page if no parameters are present.
+        return res.redirect("/");
+      }
     } catch (error) {
-      console.error("Meraki error:", error);
-      res.send('<h1>Meraki update failed!</h1><a href="/">Home</a>');
+      logger.error("Meraki update error: " + error.message);
+      next(error);
     }
   }
 );
 
-// Define the /profile route (requires authentication).
+// /profile route: Requires authentication and displays user profile.
 app.get("/profile", requiresAuth(), (req, res) => {
-  console.log("Profile route accessed for user:", req.oidc.user.email);
+  logger.info("Profile route accessed for user:", req.oidc.user.email);
   res.send(`
     <h1>Profile</h1>
     <pre>${JSON.stringify(req.oidc.user, null, 2)}</pre>
@@ -118,16 +169,25 @@ app.get("/profile", requiresAuth(), (req, res) => {
   `);
 });
 
+// Global error handling middleware: Logs error details and sends a generic error message.
+app.use((err, req, res, next) => {
+  logger.error("Global error handler caught an error: " + err.message);
+  res.status(500).send("Internal Server Error");
+});
+
 // Production: Load SSL certificates and start the HTTPS server.
-console.log("Loading SSL certificates");
+logger.info("Loading SSL certificates");
 const sslOptions = {
-  key: fs.readFileSync("/etc/ssl/private/privkey1.pem"),
-  cert: fs.readFileSync("/etc/ssl/private/fullchain1.pem"),
+  key: fs.readFileSync("C:/Users/maury/Desktop/Auth/certs/privkey1.pem"),
+  cert: fs.readFileSync("C:/Users/maury/Desktop/Auth/certs/fullchain1.pem")
 };
-console.log("SSL certificates loaded successfully.");
+logger.info("SSL certificates loaded successfully.");
 
 // Start HTTPS server (listening on all interfaces).
 https.createServer(sslOptions, app).listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running at: https://${PUBLIC_IP}:${PORT}`);
-  console.log(`Splash page (WiFi) access via: https://${PRIVATE_IP}:${PORT}`);
+  console.log(`Public Facing (Public) at: https://${PUBLIC_IP}:${PORT}`);
+  console.log(`Splash page (Private) access via: https://${PRIVATE_IP}:${PORT}`);
 });
+
+// Router Firewall Allow for port forwarding to device running the code.
+// Device firewall must allow inbound traffic on port 3000.
