@@ -4,7 +4,7 @@ const express = require("express");
 const { auth, requiresAuth } = require("express-openid-connect");
 const axios = require("axios");
 const fs = require("fs");
-// const https = require("https"); // Not used for local, want HTTP
+const https = require("https"); // Not used for local, want HTTP
 
 const app = express();
 const PORT = 3000;
@@ -19,9 +19,11 @@ const PRIVATE_IP = "192.168.128.9";
 
 const PUBLIC_IP = "137.110.115.26";
 
+const isLocal = false;
+
 // Choose protocol based on environment (HTTP for local, HTTPS for production)
-// const protocol = isLocal ? "http" : "https";
-const protocol = "https";
+const protocol = isLocal ? "http" : "https";
+// const protocol = "https";
 
 console.log("Initializing");
 
@@ -35,6 +37,8 @@ const config = {
   // Auth0 domain is always HTTPS
   issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}`,
   authorizationParams: {
+
+    // May need to test this with public_IP 
     redirect_uri: `${protocol}://${PRIVATE_IP}:${PORT}/callback`, // Match protocol for callback
   },
 };
@@ -145,6 +149,7 @@ const sslOptions = {
 console.log("SSL certificates loaded successfully.");
 
 // Start HTTPS server
+// ! NOTE: Change 0.0.0.0 to relevant ip in order to avoid security breaches
 https.createServer(sslOptions, app).listen(PORT, '0.0.0.0', () => {
 // Adjust the URLs accordingly in production.
   console.log(`Server running at: https://qi-nuc-5102.ucsd.edu:${PORT}`);
