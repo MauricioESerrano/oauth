@@ -10,16 +10,18 @@ const app = express();
 const PORT = 3000;
 
 // NUC
-// const PRIVATE_IP = "192.168.128.9";
+const PRIVATE_IP = "192.168.128.9";
 
 // Local
-const PRIVATE_IP = "100.80.225.61";
+// const PRIVATE_IP = "100.80.225.61";
+
+
+
 const PUBLIC_IP = "137.110.115.26";
 
-// Use NODE_ENV to determine if we're running locally (development) or in production.
-const isLocal = true;
 // Choose protocol based on environment (HTTP for local, HTTPS for production)
-const protocol = isLocal ? "http" : "https";
+// const protocol = isLocal ? "http" : "https";
+const protocol = "https";
 
 console.log("Initializing");
 
@@ -126,27 +128,26 @@ app.get("/profile", requiresAuth(), (req, res) => {
 // For local development, we are using HTTP so we start the server normally.
 // (In production, we want to uncomment the HTTPS server section below and load SSL certificates.)
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Internal access: ${protocol}://${PRIVATE_IP}:${PORT}`);
-  console.log(`External auth flow: ${protocol}://${PUBLIC_IP}:${PORT}`);
-});
+// app.listen(PORT, '0.0.0.0', () => {
+//   console.log(`Internal access: ${protocol}://${PRIVATE_IP}:${PORT}`);
+//   console.log(`External auth flow: ${protocol}://${PUBLIC_IP}:${PORT}`);
+// });
 
-/* 
+
 // following code for production HTTPS deployment w/ SSL certificates.
 
 // Load SSL certificates
 console.log("Loading SSL certificates");
 const sslOptions = {
-  key: fs.readFileSync("etc/ssl/privkey1.pem"),
-  cert: fs.readFileSync("etc/ssl/fullchain1.pem"),
+  key: fs.readFileSync("/privkey1.pem"),
+  cert: fs.readFileSync("/fullchain1.pem"),
 };
 console.log("SSL certificates loaded successfully.");
 
 // Start HTTPS server
 https.createServer(sslOptions, app).listen(PORT, '0.0.0.0', () => {
 // Adjust the URLs accordingly in production.
-  console.log(`Server running at: https://your-production-domain:${PORT}`);
+  console.log(`Server running at: https://qi-nuc-5102.ucsd.edu:${PORT}`);
   console.log(`Internal access: https://${PRIVATE_IP}:${PORT}`);
   console.log(`External auth flow: https://${PUBLIC_IP}:${PORT}`);
 });
-*/
