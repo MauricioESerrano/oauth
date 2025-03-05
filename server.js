@@ -33,7 +33,7 @@ const isLocal = false;
 const protocol = isLocal ? "http" : "https";
 
 // The base URL served on private
-const localBaseURL = `${protocol}://${PRIVATE_IP}:${PORT}`;
+const localBaseURL = `${protocol}://${PUBLIC_IP}:${PORT}`;
 // Callback URL for handling Auth0 responses
 const callbackURL = `${protocol}://${PUBLIC_IP}:${PORT}/callback`;
 
@@ -207,7 +207,7 @@ logger.info("SSL certificates loaded successfully.");
 // Start HTTPS server (listening on all interfaces).
 https.createServer(sslOptions, app).listen(PORT, "0.0.0.0", () => {
   console.log(`Public Facing (Public) at: ${protocol}://${PUBLIC_IP}:${PORT}`);
-  console.log(`Splash page (Private) access via: ${protocol}://${PRIVATE_IP}:${PORT}`);
+  // console.log(`Splash page (Private) access via: ${protocol}://${PRIVATE_IP}:${PORT}`);
 });
 
 // Note: Ensure router forwards port 3000 to your device and that any firewalls allow traffic on port 3000.
