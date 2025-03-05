@@ -1,0 +1,10 @@
+{"level":"info","message":"Initializing application","timestamp":"2025-03-05T16:44:54.432Z"}
+{"auth0Logout":true,"authRequired":false,"authorizationParams":{"redirect_uri":"https://68.252.125.3:3000/callback"},"baseURL":"https://192.168.1.75:3000","clientID":"zSUIHbEHmFSEHv5qTCREHrIXmmtY35bc","issuerBaseURL":"https://dev-7sopy13q8rm3f41h.us.auth0.com","level":"info","message":"Auth0 configuration initialized:","secret":"L8AWoYG2WD7cuOSaCnr1_MWxMhyIbxBleKR32oQjAW5kLyODFz80KqsnPVW7UXSB","timestamp":"2025-03-05T16:44:54.436Z"}
+{"level":"info","message":"Auth0 applied.","timestamp":"2025-03-05T16:44:54.459Z"}
+{"level":"info","message":"Loading SSL certificates","timestamp":"2025-03-05T16:44:54.460Z"}
+{"level":"info","message":"SSL certificates loaded successfully.","timestamp":"2025-03-05T16:44:54.461Z"}
+{"level":"info","message":"Initializing application","timestamp":"2025-03-05T16:45:20.202Z"}
+{"auth0Logout":true,"authRequired":false,"authorizationParams":{"redirect_uri":"http://68.252.125.3:3000/callback"},"baseURL":"http://192.168.1.75:3000","clientID":"zSUIHbEHmFSEHv5qTCREHrIXmmtY35bc","issuerBaseURL":"https://dev-7sopy13q8rm3f41h.us.auth0.com","level":"info","message":"Auth0 configuration initialized:","secret":"L8AWoYG2WD7cuOSaCnr1_MWxMhyIbxBleKR32oQjAW5kLyODFz80KqsnPVW7UXSB","timestamp":"2025-03-05T16:45:20.208Z"}
+{"level":"info","message":"Auth0 applied.","timestamp":"2025-03-05T16:45:20.237Z"}
+{"level":"info","message":"Loading SSL certificates","timestamp":"2025-03-05T16:45:20.237Z"}
+{"level":"info","message":"SSL certificates loaded successfully.","timestamp":"2025-03-05T16:45:20.238Z"}
