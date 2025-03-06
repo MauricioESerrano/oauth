@@ -24,7 +24,6 @@ const logger = winston.createLogger({
 const app = express();
 const PORT = 3000;
 
-// MY APARTMENT network settings
 const PRIVATE_IP = "192.168.128.9";
 const PUBLIC_IP = "137.110.115.26";
 
@@ -32,10 +31,16 @@ const PUBLIC_IP = "137.110.115.26";
 const isLocal = false;
 const protocol = isLocal ? "http" : "https";
 
-// The base URL served on private
-const localBaseURL = `${protocol}://${PUBLIC_IP}:${PORT}`;
+
+// const localBaseURL = `${protocol}://${PUBLIC_IP}:${PORT}`;
 // Callback URL for handling Auth0 responses
-const callbackURL = `${protocol}://${PUBLIC_IP}:${PORT}/callback`;
+// const callbackURL = `${protocol}://${PUBLIC_IP}:${PORT}/callback`;
+
+const localBaseURL = "https://qi-nuc-5102.ucsd.edu:3000";
+const callbackURL = "https://qi-nuc-5102.ucsd.edu:3000/callback";
+
+
+
 
 logger.info("Initializing application");
 
@@ -97,7 +102,8 @@ app.get("/", (req, res) => {
   // Capture GET parameters sent by Meraki (if any) and store in session
   const { base_grant_url, user_continue_url, node_mac, client_ip, client_mac } = req.query;
   if (base_grant_url && user_continue_url) {
-    req.session.merakiParams = { base_grant_url, user_continue_url, node_mac, client_ip, client_mac };
+    // req.session.merakiParams = { base_grant_url, user_continue_url, node_mac, client_ip, client_mac };
+    req.session.merakiParams = { base_grant_url, user_continue_url};
     logger.info("Stored Meraki parameters in session:", req.session.merakiParams);
   } else {
     logger.info("No Meraki parameters found in query.");
@@ -160,6 +166,11 @@ app.get(
       );
       logger.info("Meraki update successful.");
 
+      logger.info("MerakiParams = " + req.session.merakiParams);
+      logger.info("merakiparams basegrantURL = " + req.session.merakiParams.base_grant_url);
+      logger.info("MerakiParams user continueURL = " + req.session.merakiParams.user_continue_url);
+
+
       // If Meraki splash parameters were captured, redirect the user to grant URL.
       if (req.session.merakiParams && req.session.merakiParams.base_grant_url && req.session.merakiParams.user_continue_url) {
         const { base_grant_url, user_continue_url } = req.session.merakiParams;
@@ -207,7 +218,7 @@ logger.info("SSL certificates loaded successfully.");
 // Start HTTPS server (listening on all interfaces).
 https.createServer(sslOptions, app).listen(PORT, "0.0.0.0", () => {
   console.log(`Public Facing (Public) at: ${protocol}://${PUBLIC_IP}:${PORT}`);
-  // console.log(`Splash page (Private) access via: ${protocol}://${PRIVATE_IP}:${PORT}`);
+  console.log('updated');
 });
 
 // Note: Ensure router forwards port 3000 to your device and that any firewalls allow traffic on port 3000.
