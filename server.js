@@ -93,7 +93,7 @@ app.get("/", (req, res) => {
 
   // If user is authenticated, check for Meraki parameters and redirect if available.
   if (req.oidc && req.oidc.isAuthenticated()) {
-    if (req.session.merakiParams && req.session.merakiParams.base_grant_url && req.session.merakiParams.user_continue_url) {
+    if (req.session.merakiParams.base_grant_url && req.session.merakiParams.user_continue_url) {
       const base_grant_url = req.session.merakiParams.base_grant_url;
       const user_continue_url = req.session.merakiParams.user_continue_url;
       // Clear the stored parameters from session for security.
@@ -102,14 +102,6 @@ app.get("/", (req, res) => {
       const redirectURL = `${base_grant_url}?continue_url=${encodeURIComponent(user_continue_url)}`;
       logger.info("Redirecting user to Meraki grant URL:", redirectURL);
       return res.redirect(redirectURL);
-    } else {
-      // If no Meraki parameters, just show the welcome page.
-      logger.info("User authenticated but no Meraki parameters in session. Showing welcome page.");
-      return res.send(`
-        <h1>Welcome ${req.oidc.user.name}</h1>
-        <p>You are logged in.</p>
-        <a href="/logout">Logout</a>
-      `);
     }
   } else {
     // User is not authenticated: show login prompt.
