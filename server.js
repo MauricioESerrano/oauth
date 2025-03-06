@@ -35,13 +35,9 @@ const protocol = isLocal ? "http" : "https";
 const localBaseURL = "https://qi-nuc-5102.ucsd.edu:3000";
 const callbackURL = "https://qi-nuc-5102.ucsd.edu:3000/callback";
 
-logger.info("Initializing application");
 
 // Set up session middleware (used to store Meraki GET parameters)
 // Ensure that SESSION_SECRET is defined in your .env
-if (!process.env.SESSION_SECRET) {
-  logger.error("SESSION_SECRET is not defined in .env!");
-}
 app.use(
   session({
     secret: process.env.SESSION_SECRET,
@@ -53,7 +49,6 @@ app.use(
 // Middleware to enforce HTTPS redirection (production only)
 app.use((req, res, next) => {
   if (!req.secure && !isLocal) {
-    logger.info("Redirecting to HTTPS:", req.headers.host + req.url);
     return res.redirect(`https://${req.headers.host}${req.url}`);
   }
   next();
@@ -72,11 +67,8 @@ const config = {
   }
 };
 
-logger.info("Auth0 configuration initialized:", config);
-
 // Add Auth0 authentication middleware.
 app.use(auth(config));
-logger.info("Auth0 applied.");
 
 // Root route: Captures Meraki splash GET parameters and shows the splash page.
 app.get("/", (req, res) => {
@@ -93,7 +85,7 @@ app.get("/", (req, res) => {
 
   // If user is authenticated, check for Meraki parameters and redirect if available.
   if (req.oidc && req.oidc.isAuthenticated()) {
-    if (req.session.merakiParams.base_grant_url && req.session.merakiParams.user_continue_url) {
+    if (req.session.merakiParams && req.session.merakiParams.base_grant_url && req.session.merakiParams.user_continue_url) {
       const base_grant_url = req.session.merakiParams.base_grant_url;
       const user_continue_url = req.session.merakiParams.user_continue_url;
       // Clear the stored parameters from session for security.
@@ -102,6 +94,14 @@ app.get("/", (req, res) => {
       const redirectURL = `${base_grant_url}?continue_url=${encodeURIComponent(user_continue_url)}`;
       logger.info("Redirecting user to Meraki grant URL:", redirectURL);
       return res.redirect(redirectURL);
+    } else {
+      // If authenticated but no Meraki parameters, show welcome page.
+      logger.info("User is authenticated but no Meraki parameters available.");
+      return res.send(`
+        <h1>Welcome ${req.oidc.user.name}</h1>
+        <p>You are logged in.</p>
+        <a href="/logout">Logout</a>
+      `);
     }
   } else {
     // User is not authenticated: show login prompt.
@@ -116,24 +116,17 @@ app.get("/", (req, res) => {
 
 // /login route: Redirects the user to the Auth0 universal login page.
 app.get("/login", (req, res) => {
-  logger.info("Login route accessed. Session before login:", req.session);
   res.oidc.login();
 });
 
 // /callback route: Handles Auth0 callback, updates Meraki client details, and redirects.
-app.get(
-  "/callback",
-  (req, res, next) => {
-    logger.info("Callback query parameters:", req.query);
-    logger.info("Session at callback start:", req.session);
+app.get("/callback",(req, res, next) => {
     req.oidc.handleCallback(req, res, next);
   },
   async (req, res, next) => {
-    logger.info("Callback route processing after handleCallback.");
     try {
       const user = req.oidc.user;
       const merakiNetworkId = "L_686235993220612846";
-      logger.info("Updating Meraki client details for:", user.email);
 
       // POST updated client details to the Meraki API.
       await axios.post(
@@ -152,8 +145,6 @@ app.get(
       );
       logger.info("Meraki update successful.");
 
-      // Redirect to the root route where the Meraki redirect logic will occur.
-      res.redirect("/");
     } catch (error) {
       logger.error("Meraki update error: " + error.message);
       next(error);
@@ -161,21 +152,26 @@ app.get(
   }
 );
 
-// /profile route: Requires authentication and displays user profile.
-app.get("/profile", requiresAuth(), (req, res) => {
-  logger.info("Profile route accessed for user:", req.oidc.user.email);
-  res.send(`
-    <h1>Profile</h1>
-    <pre>${JSON.stringify(req.oidc.user, null, 2)}</pre>
-    <a href="/">Home</a>
-  `);
-});
-
 // Global error handling middleware: Logs error details and sends a generic error message.
 app.use((err, req, res, next) => {
   logger.error("Global error handler caught an error: " + err.message);
   res.status(500).send("Internal Server Error");
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // Production: Load SSL certificates and start the HTTPS server.
 logger.info("Loading SSL certificates");
