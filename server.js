@@ -50,7 +50,6 @@ app.use(
   })
 );
 
-
 // Middleware to enforce HTTPS redirection (production only)
 app.use((req, res, next) => {
   if (!req.secure && !isLocal) {
@@ -79,11 +78,10 @@ logger.info("Auth0 configuration initialized:", config);
 app.use(auth(config));
 logger.info("Auth0 applied.");
 
-
 // Root route: Captures Meraki splash GET parameters and shows the splash page.
 app.get("/", (req, res) => {
   // Only update session if the query parameters are present.
-  const { base_grant_url, user_continue_url, node_mac, client_ip, client_mac } = req.query;
+  const { base_grant_url, user_continue_url } = req.query;
   if (base_grant_url && user_continue_url) {
     req.session.merakiParams = { base_grant_url, user_continue_url };
     logger.info("Stored Meraki parameters in session:", req.session.merakiParams);
@@ -93,16 +91,8 @@ app.get("/", (req, res) => {
     logger.info("No Meraki parameters found in query and none stored in session.");
   }
 
-  // Display splash page based on authentication status
+  // If user is authenticated, check for Meraki parameters and redirect if available.
   if (req.oidc && req.oidc.isAuthenticated()) {
-    logger.info("User authenticated:", req.oidc.user);
-    res.send(`
-      <h1>Welcome ${req.oidc.user.name}</h1>
-      <p>You are logged in.</p>
-      <a href="/logout">Logout</a>
-    `);
-
-    logger.info("MerakiParams = " + req.session.merakiParams);
     if (req.session.merakiParams && req.session.merakiParams.base_grant_url && req.session.merakiParams.user_continue_url) {
       const base_grant_url = req.session.merakiParams.base_grant_url;
       const user_continue_url = req.session.merakiParams.user_continue_url;
@@ -113,13 +103,18 @@ app.get("/", (req, res) => {
       logger.info("Redirecting user to Meraki grant URL:", redirectURL);
       return res.redirect(redirectURL);
     } else {
-      logger.info("No Meraki parameters in session. Redirecting to splash page.");
-      return res.redirect("/");
+      // If no Meraki parameters, just show the welcome page.
+      logger.info("User authenticated but no Meraki parameters in session. Showing welcome page.");
+      return res.send(`
+        <h1>Welcome ${req.oidc.user.name}</h1>
+        <p>You are logged in.</p>
+        <a href="/logout">Logout</a>
+      `);
     }
-    
   } else {
+    // User is not authenticated: show login prompt.
     logger.info("User is not authenticated; showing login prompt.");
-    res.send(`
+    return res.send(`
       <h1>Welcome to WiFi Access</h1>
       <p>Please log in to gain access.</p>
       <a href="/login">Login</a>
@@ -127,17 +122,16 @@ app.get("/", (req, res) => {
   }
 });
 
-// /login route: Redirects the user to the Auth0 universal login page
+// /login route: Redirects the user to the Auth0 universal login page.
 app.get("/login", (req, res) => {
   logger.info("Login route accessed. Session before login:", req.session);
   res.oidc.login();
 });
 
-// /callback route: Handles Auth0 callback, updates Meraki client details, and redirects using Meraki splash parameters.
+// /callback route: Handles Auth0 callback, updates Meraki client details, and redirects.
 app.get(
   "/callback",
   (req, res, next) => {
-    // Log the query and session data to check if state parameter exists
     logger.info("Callback query parameters:", req.query);
     logger.info("Session at callback start:", req.session);
     req.oidc.handleCallback(req, res, next);
@@ -165,7 +159,9 @@ app.get(
         }
       );
       logger.info("Meraki update successful.");
-      
+
+      // Redirect to the root route where the Meraki redirect logic will occur.
+      res.redirect("/");
     } catch (error) {
       logger.error("Meraki update error: " + error.message);
       next(error);
@@ -197,10 +193,7 @@ const sslOptions = {
 };
 logger.info("SSL certificates loaded successfully.");
 
-// Start HTTPS server (listening on all interfaces).
 https.createServer(sslOptions, app).listen(PORT, "0.0.0.0", () => {
   console.log(`Public Facing (Public) at: ${protocol}://${PUBLIC_IP}:${PORT}`);
-  console.log('updated');
+  console.log("updated");
 });
-
-// Note: Ensure router forwards port 3000 to your device and that any firewalls allow traffic on port 3000.
