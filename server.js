@@ -50,11 +50,6 @@ app.use(
   })
 );
 
-// Debug middleware: Log session details (remove after debugging)
-app.use((req, res, next) => {
-  logger.info("Session data:", req.session);
-  next();
-});
 
 // Middleware to enforce HTTPS redirection (production only)
 app.use((req, res, next) => {
@@ -84,11 +79,6 @@ logger.info("Auth0 configuration initialized:", config);
 app.use(auth(config));
 logger.info("Auth0 applied.");
 
-// Debug middleware to log incoming query parameters (especially on initial splash page load)
-app.use((req, res, next) => {
-  logger.info("Incoming request query:", req.query);
-  next();
-});
 
 // Root route: Captures Meraki splash GET parameters and shows the splash page.
 app.get("/", (req, res) => {
@@ -111,6 +101,22 @@ app.get("/", (req, res) => {
       <p>You are logged in.</p>
       <a href="/logout">Logout</a>
     `);
+
+    logger.info("MerakiParams = " + req.session.merakiParams);
+    if (req.session.merakiParams && req.session.merakiParams.base_grant_url && req.session.merakiParams.user_continue_url) {
+      const base_grant_url = req.session.merakiParams.base_grant_url;
+      const user_continue_url = req.session.merakiParams.user_continue_url;
+      // Clear the stored parameters from session for security.
+      req.session.merakiParams = null;
+      // Build redirect URL.
+      const redirectURL = `${base_grant_url}?continue_url=${encodeURIComponent(user_continue_url)}`;
+      logger.info("Redirecting user to Meraki grant URL:", redirectURL);
+      return res.redirect(redirectURL);
+    } else {
+      logger.info("No Meraki parameters in session. Redirecting to splash page.");
+      return res.redirect("/");
+    }
+    
   } else {
     logger.info("User is not authenticated; showing login prompt.");
     res.send(`
@@ -159,21 +165,7 @@ app.get(
         }
       );
       logger.info("Meraki update successful.");
-
-      logger.info("MerakiParams = " + req.session.merakiParams);
-      if (req.session.merakiParams && req.session.merakiParams.base_grant_url && req.session.merakiParams.user_continue_url) {
-        const base_grant_url = req.session.merakiParams.base_grant_url;
-        const user_continue_url = req.session.merakiParams.user_continue_url;
-        // Clear the stored parameters from session for security.
-        req.session.merakiParams = null;
-        // Build redirect URL.
-        const redirectURL = `${base_grant_url}?continue_url=${encodeURIComponent(user_continue_url)}`;
-        logger.info("Redirecting user to Meraki grant URL:", redirectURL);
-        return res.redirect(redirectURL);
-      } else {
-        logger.info("No Meraki parameters in session. Redirecting to splash page.");
-        return res.redirect("/");
-      }
+      
     } catch (error) {
       logger.error("Meraki update error: " + error.message);
       next(error);
