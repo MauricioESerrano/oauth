@@ -8,7 +8,9 @@ const https = require("https");
 const session = require("express-session");
 const winston = require("winston");
 
-// Set up logger
+// =====================================================================================
+//                               Logger Initialization
+// =====================================================================================
 const logger = winston.createLogger({
   level: "info",
   format: winston.format.combine(
@@ -24,20 +26,19 @@ const logger = winston.createLogger({
 const app = express();
 const PORT = 3000;
 
+// Legacy
 const PRIVATE_IP = "192.168.128.9";
 const PUBLIC_IP = "137.110.115.26";
 
-// false == production, true == local
+// Local vs. Production
 const isLocal = false;
 const protocol = isLocal ? "http" : "https";
 
-// Using a fully-qualified domain for production
 const localBaseURL = "https://qi-nuc-5102.ucsd.edu:3000";
 const callbackURL = "https://qi-nuc-5102.ucsd.edu:3000/callback";
 
 
 // Set up session middleware (used to store Meraki GET parameters)
-// Ensure that SESSION_SECRET is defined in your .env
 app.use(
   session({
     secret: process.env.SESSION_SECRET,
@@ -54,7 +55,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// AUTH0 settings (make sure your Auth0 dashboard callback matches this URL)
+// =====================================================================================
+//                         Auth0 Settings (Initalizer) initializer
+// =====================================================================================
 const config = {
   authRequired: false,
   auth0Logout: true,
@@ -70,7 +73,12 @@ const config = {
 // Add Auth0 authentication middleware.
 app.use(auth(config));
 
+
+// =====================================================================================
+//                           General Logic for Handling User
+// =====================================================================================
 // Root route: Captures Meraki splash GET parameters and shows the splash page.
+
 app.get("/", (req, res) => {
   // Only update session if the query parameters are present.
   const { base_grant_url, user_continue_url } = req.query;
@@ -99,8 +107,8 @@ app.get("/", (req, res) => {
       logger.info("User is authenticated but no Meraki parameters available.");
       return res.send(`
         <h1>Welcome ${req.oidc.user.name}</h1>
-        <p>You are logged in.</p>
-        <a href="/logout">Logout</a>
+        <p>In truth you should never be here because if you are then that means that you authenticated but are not on the wifi still.</p>
+        <a href="/logout">Restart</a>
       `);
     }
   } else {
@@ -114,12 +122,21 @@ app.get("/", (req, res) => {
   }
 });
 
+
+// =====================================================================================
+//                            Login Button (Redirects to oAuth)
+// =====================================================================================
+
 // /login route: Redirects the user to the Auth0 universal login page.
 app.get("/login", (req, res) => {
   res.oidc.login();
 });
 
-// /callback route: Handles Auth0 callback, updates Meraki client details, and redirects.
+// =====================================================================================
+//                                    Meraki Callback
+// =====================================================================================
+// /callback route: Handles Auth0 callback, updates Meraki client with user details
+
 app.get("/callback",(req, res, next) => {
     req.oidc.handleCallback(req, res, next);
   },
@@ -152,6 +169,12 @@ app.get("/callback",(req, res, next) => {
   }
 );
 
+
+// =====================================================================================
+//                                     Universal Error
+// =====================================================================================
+
+
 // Global error handling middleware: Logs error details and sends a generic error message.
 app.use((err, req, res, next) => {
   logger.error("Global error handler caught an error: " + err.message);
@@ -160,17 +183,9 @@ app.use((err, req, res, next) => {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
+// =====================================================================================
+//                       SSL Certificate Loading && Server creater 
+// =====================================================================================
 
 
 // Production: Load SSL certificates and start the HTTPS server.
@@ -182,6 +197,6 @@ const sslOptions = {
 logger.info("SSL certificates loaded successfully.");
 
 https.createServer(sslOptions, app).listen(PORT, "0.0.0.0", () => {
-  console.log(`Public Facing (Public) at: ${protocol}://${PUBLIC_IP}:${PORT}`);
-  console.log("updated");
+  console.log(`Public Facing (Public) at: ${protocol}://qi-nuc-5102.ucsd.edu:${PORT}`);
+  console.log("update 0.0");
 });
